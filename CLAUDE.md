@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Python-based documentation scraper that downloads Claude Code documentation from the Anthropic website, converts it to Markdown, and serves it locally. The primary purpose is to maintain a local copy of Claude Code documentation for offline reference and context provision.
 
+**Tech Stack:**
+- **Package Manager:** UV (fast Python package installer)
+- **Python Version:** 3.13+
+- **Dependencies:** requests, beautifulsoup4, html2text, pyyaml, click, flask
+- **CLI Framework:** Click (for command-line interface)
+- **Web Server:** Flask (for local serving)
+
 ## Architecture
 
 ### Core Component: DocumentationScraper Class
@@ -45,11 +52,12 @@ The entire scraper is implemented as a single class (`DocumentationScraper` in `
 
 ```
 /
-├── main.py              # Single-file implementation
+├── main.py              # Single-file implementation (all logic in DocumentationScraper class)
 ├── pyproject.toml       # UV package configuration
-├── downloads/          # Current download (git-ignored)
+├── Makefile            # Common commands (setup, run, serve, etc.)
+├── downloads/          # Current download (tracked in git since workflow commits it)
 │   ├── meta.json      # Tracks download date and completion status
-│   ├── db.yaml        # URL tracking database
+│   ├── db.yaml        # URL tracking database (moved from downloads/html/db.yaml)
 │   ├── html/          # Downloaded HTML files
 │   │   └── *.html    # Documentation pages (preserves site structure)
 │   └── md/           # Converted Markdown files
@@ -60,6 +68,8 @@ The entire scraper is implemented as a single class (`DocumentationScraper` in `
         ├── html/     # Archived HTML files
         └── md/       # Archived Markdown files
 ```
+
+**Note:** The `downloads/` folder is tracked in git (not ignored) because the GitHub Actions workflow commits it daily. Only `archive/` is git-ignored.
 
 ### Data Flow
 
@@ -103,11 +113,33 @@ python main.py --html --md --serve
 ### Development Setup
 
 ```bash
-# Install dependencies (UV will create/activate .venv automatically)
-uv sync
+# First-time setup (creates virtual environment and installs dependencies)
+make setup
 
-# Run the scraper
+# Run the scraper (full workflow: download + convert)
+make run-full
+
+# Or using uv directly
 uv run python main.py --html --md
+```
+
+### Makefile Commands
+
+The project uses a Makefile for common operations:
+
+```bash
+make help          # Show all available commands
+make setup         # First-time setup (uv venv && uv sync)
+make run-full      # Download HTML and convert to Markdown
+make run-html      # Download HTML only
+make run-md        # Convert to Markdown only
+make serve         # Start web server on port 8000
+make serve-port PORT=8080  # Start web server on custom port
+make info          # Show download status and statistics
+make archive-status # Show current date and archive history
+make check         # Verify dependencies are installed
+make clean         # Remove downloads/
+make clean-all     # Remove downloads/, archive/, .venv/
 ```
 
 ## Key Implementation Details
@@ -125,11 +157,31 @@ The scraper uses a cascading fallback approach for extracting main content:
 
 ### HTML2Text Configuration
 
-The converter is configured with specific settings (main.py:38-46):
+The converter is configured with specific settings (main.py:51-58):
 - No line wrapping (`body_width = 0`)
 - Unicode characters preserved (`unicode_snob = True`)
+- Escape special characters (`escape_snob = True`)
 - Proper code block marking (`mark_code = True`)
 - Links and images retained
+
+### Error Handling and URL Validation
+
+The scraper includes robust error handling (main.py:239-281):
+
+**Domain Validation:**
+- Only downloads from `docs.anthropic.com` or `docs.claude.com`
+- Detects redirects to different domains and skips them
+- Warns about unexpected redirects with detailed logging
+
+**HTTP Error Detection:**
+- Checks for HTTP 4xx/5xx status codes
+- Detects "soft 404s" (HTTP 200 with "Page Not Found" content)
+- Skips downloading invalid/error pages
+
+**Link Discovery:**
+- Only follows Claude Code documentation links
+- Supports both current (`docs.claude.com`) and legacy (`docs.anthropic.com`) base URLs
+- Cleans URLs by removing fragments and query parameters for consistency
 
 ### URL to Path Mapping
 
@@ -142,11 +194,13 @@ URLs are converted to file paths by:
 
 ### Database Format
 
-`downloads/html/db.yaml` tracks downloaded files:
+`downloads/db.yaml` tracks downloaded files (sorted by URL for deterministic git diffs):
 ```yaml
 - url: https://docs.anthropic.com/en/docs/claude-code/setup
   filepath: setup.html
 ```
+
+**Note:** Database entries are sorted alphabetically by URL when saved (main.py:191) to ensure clean git diffs and deterministic output.
 
 ### Meta Format
 
@@ -212,40 +266,71 @@ python main.py --html --md
 
 When updating documentation locally:
 
-1. Run `make run` (or `python main.py --html --md`)
-   - On first run of the day: Archives previous download, starts fresh
-   - On subsequent runs same day: Continues existing download
-2. Markdown files in `downloads/md/` serve as reference material for understanding Claude Code capabilities
-3. Historical versions are preserved in `archive/YYYYMMDD/` folders
+1. **First-time setup:**
+   ```bash
+   make setup  # Creates .venv and installs dependencies
+   ```
+
+2. **Download and convert:**
+   ```bash
+   make run-full  # or: make run (alias)
+   ```
+   - On first run of the day: Archives previous download (if different date), starts fresh
+   - On subsequent runs same day with status=completed: Skips (idempotent)
+   - On subsequent runs same day with status=processing: Cleans up incomplete download, restarts
+
+3. **Browse locally:**
+   ```bash
+   make serve  # Opens http://localhost:8000
+   ```
+
+4. **Check status:**
+   ```bash
+   make info            # Show download stats
+   make archive-status  # Show current date and archives
+   ```
+
+5. Markdown files in `downloads/md/` serve as reference material for understanding Claude Code capabilities
+6. Historical versions are preserved in `archive/YYYYMMDD/` folders
 
 ### Automated Daily Releases (GitHub Actions)
 
-The repository includes `.github/workflows/daily-docs-release.yml` that:
+The repository includes `.github/workflows/daily-docs-release.yml` that provides automated daily documentation snapshots:
 
-1. **Triggers:** Daily at midnight UTC (cron: `0 0 * * *`) + manual via workflow_dispatch
-2. **Process:**
-   - Sets up uv and Python environment
-   - Runs `make setup && make run`
-   - Extracts date from `downloads/meta.json`
-   - Creates GitHub Release with tag `docs-YYYYMMDD`
-   - **Commits and pushes `downloads/` folder to repository**
-3. **Release Assets:**
+**Triggers:**
+- Daily at midnight UTC (cron: `0 0 * * *`)
+- Manual via workflow_dispatch in GitHub Actions tab
+
+**Process:**
+1. Sets up uv and Python environment
+2. Runs `make setup && make run` to download and convert docs
+3. Extracts date from `downloads/meta.json`
+4. Creates archives:
    - `claude-code-docs-YYYYMMDD.tar.gz` - Complete download
    - `html-YYYYMMDD.tar.gz` - HTML files only
    - `md-YYYYMMDD.tar.gz` - Markdown files only
-4. **Release Notes:** Auto-generated with download stats and usage instructions
-5. **Git Commit:** Automated commit with message format:
-   ```
-   docs: update documentation for YYYY-MM-DD
+5. Creates GitHub Release with tag `docs-YYYYMMDD`
+6. **Commits and pushes `downloads/` folder to repository**
 
-   - Downloaded on: YYYYMMDD
-   - HTML files: N
-   - Markdown files: N
-   - Release: docs-YYYYMMDD
-   ```
+**Git Commit Format:**
+```
+docs: update documentation for YYYY-MM-DD
 
-This provides daily snapshots accessible via both:
-- **GitHub Releases** - Downloadable archives
+- Downloaded on: YYYYMMDD
+- HTML files: N
+- Markdown files: N
+- Release: docs-YYYYMMDD
+
+Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+```
+
+**Release Notes:** Auto-generated with:
+- Download statistics (HTML/MD file counts)
+- Usage instructions for downloading and extracting
+- Direct download links for all archives
+
+**Dual Access:**
+- **GitHub Releases** - Downloadable archives for offline use
 - **Repository** - Browse `downloads/` folder directly on GitHub
 
-**Important:** The `downloads/` folder is tracked in git (only `archive/` is ignored), allowing users to browse current documentation without downloading.
+**Important:** The `downloads/` folder is tracked in git (only `archive/` is ignored), enabling users to view current documentation without downloading releases.
