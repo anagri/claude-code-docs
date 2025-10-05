@@ -187,11 +187,30 @@ python main.py --html --md
 
 ## Typical Workflow
 
-When updating documentation:
+### Local Development
 
-1. Run `python main.py --html` to download latest HTML
+When updating documentation locally:
+
+1. Run `make run` (or `python main.py --html --md`)
    - On first run of the day: Archives previous download, starts fresh
    - On subsequent runs same day: Continues existing download
-2. Run `python main.py --md` to convert to Markdown
-3. Markdown files in `downloads/md/` serve as reference material for understanding Claude Code capabilities
-4. Historical versions are preserved in `archive/YYYYMMDD/` folders
+2. Markdown files in `downloads/md/` serve as reference material for understanding Claude Code capabilities
+3. Historical versions are preserved in `archive/YYYYMMDD/` folders
+
+### Automated Daily Releases (GitHub Actions)
+
+The repository includes `.github/workflows/daily-docs-release.yml` that:
+
+1. **Triggers:** Daily at midnight UTC (cron: `0 0 * * *`) + manual via workflow_dispatch
+2. **Process:**
+   - Sets up uv and Python environment
+   - Runs `make setup && make run`
+   - Extracts date from `downloads/meta.json`
+   - Creates GitHub Release with tag `docs-YYYYMMDD`
+3. **Release Assets:**
+   - `claude-code-docs-YYYYMMDD.tar.gz` - Complete download
+   - `html-YYYYMMDD.tar.gz` - HTML files only
+   - `md-YYYYMMDD.tar.gz` - Markdown files only
+4. **Release Notes:** Auto-generated with download stats and usage instructions
+
+This provides daily snapshots of Claude Code documentation accessible via GitHub Releases, eliminating the need to run the scraper manually for most users.

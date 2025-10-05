@@ -1,0 +1,142 @@
+name: Daily Documentation Release
+
+on:
+  schedule:
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
+
+  workflow_dispatch:
+    # Allow manual trigger from Actions tab
+
+permissions:
+  contents: write  # Required for creating releases
+
+jobs:
+  download-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Setup project and dependencies
+        run: make setup
+
+      - name: Download and convert documentation
+        run: make run
+
+      - name: Extract download date from meta.json
+        id: date
+        run: |
+          DOWNLOAD_DATE=$(cat downloads/meta.json | grep download_date | cut -d'"' -f4)
+          echo "download_date=$DOWNLOAD_DATE" >> $GITHUB_OUTPUT
+
+          # Format for release title (YYYY-MM-DD)
+          FORMATTED_DATE=$(echo $DOWNLOAD_DATE | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/')
+          echo "formatted_date=$FORMATTED_DATE" >> $GITHUB_OUTPUT
+
+          # Tag name
+          echo "tag_name=docs-$DOWNLOAD_DATE" >> $GITHUB_OUTPUT
+
+      - name: Count files
+        id: stats
+        run: |
+          HTML_COUNT=$(find downloads/html -name '*.html' | wc -l | tr -d ' ')
+          MD_COUNT=$(find downloads/md -name '*.md' | wc -l | tr -d ' ')
+          echo "html_count=$HTML_COUNT" >> $GITHUB_OUTPUT
+          echo "md_count=$MD_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Create release archives
+        run: |
+          # Create individual archives
+          cd downloads
+          tar -czf ../html-${{ steps.date.outputs.download_date }}.tar.gz html/
+          tar -czf ../md-${{ steps.date.outputs.download_date }}.tar.gz md/
+          cd ..
+
+          # Create complete downloads archive
+          tar -czf claude-code-docs-${{ steps.date.outputs.download_date }}.tar.gz downloads/
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.date.outputs.tag_name }}
+          release_name: Claude Code Docs - ${{ steps.date.outputs.formatted_date }}
+          body: |
+            ## Claude Code Documentation - ${{ steps.date.outputs.formatted_date }}
+
+            Automated daily snapshot of Claude Code documentation from https://docs.anthropic.com/en/docs/claude-code/
+
+            ### 📊 Statistics
+            - **HTML files:** ${{ steps.stats.html_count }}
+            - **Markdown files:** ${{ steps.stats.md_count }}
+            - **Download date:** ${{ steps.date.outputs.download_date }}
+
+            ### 📦 Assets
+            - `claude-code-docs-${{ steps.date.outputs.download_date }}.tar.gz` - Complete download (HTML + MD)
+            - `html-${{ steps.date.outputs.download_date }}.tar.gz` - HTML files only
+            - `md-${{ steps.date.outputs.download_date }}.tar.gz` - Markdown files only
+
+            ### 🚀 Usage
+            ```bash
+            # Download complete archive
+            wget https://github.com/${{ github.repository }}/releases/download/${{ steps.date.outputs.tag_name }}/claude-code-docs-${{ steps.date.outputs.download_date }}.tar.gz
+
+            # Extract
+            tar -xzf claude-code-docs-${{ steps.date.outputs.download_date }}.tar.gz
+
+            # Browse markdown files
+            cd downloads/md
+            ```
+
+            ---
+            *Generated automatically by GitHub Actions*
+          draft: false
+          prerelease: false
+
+      - name: Upload complete archive
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./claude-code-docs-${{ steps.date.outputs.download_date }}.tar.gz
+          asset_name: claude-code-docs-${{ steps.date.outputs.download_date }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload HTML archive
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./html-${{ steps.date.outputs.download_date }}.tar.gz
+          asset_name: html-${{ steps.date.outputs.download_date }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Markdown archive
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./md-${{ steps.date.outputs.download_date }}.tar.gz
+          asset_name: md-${{ steps.date.outputs.download_date }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "Workflow completed"
+          echo "Release created: ${{ steps.date.outputs.tag_name }}"
