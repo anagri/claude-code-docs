@@ -16,5 +16,8 @@ dependencies = [
 [project.scripts]
 claude-code-docs = "main:main"
 
+[tool.setuptools]
+py-modules = ["main"]
+
 [tool.uv]
 package = true

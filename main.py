@@ -11,9 +11,12 @@ import os
 import re
 import sys
 import yaml
+import json
 import click
 import requests
+import shutil
 from pathlib import Path
+from datetime import datetime
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 import html2text
@@ -26,14 +29,21 @@ class DocumentationScraper:
   
   def __init__(self, base_dir: Path):
     self.base_dir = base_dir
-    self.html_dir = base_dir / "html"
-    self.md_dir = base_dir / "md"
+    self.downloads_dir = base_dir / "downloads"
+    self.archive_dir = base_dir / "archive"
+    self.html_dir = self.downloads_dir / "html"
+    self.md_dir = self.downloads_dir / "md"
     self.db_file = self.html_dir / "db.yaml"
+    self.meta_file = self.downloads_dir / "meta.json"
     self.base_url = "https://docs.anthropic.com/en/docs/claude-code/"
-    
+
+    # Handle archiving based on date
+    self._handle_archiving()
+
     # Ensure directories exist
-    self.html_dir.mkdir(exist_ok=True)
-    self.md_dir.mkdir(exist_ok=True)
+    self.downloads_dir.mkdir(exist_ok=True)
+    self.html_dir.mkdir(parents=True, exist_ok=True)
+    self.md_dir.mkdir(parents=True, exist_ok=True)
     
     # Initialize HTML to text converter
     self.h2t = html2text.HTML2Text()
@@ -44,7 +54,85 @@ class DocumentationScraper:
     self.h2t.unicode_snob = True  # Use unicode characters
     self.h2t.escape_snob = True  # Escape special characters properly
     self.h2t.mark_code = True  # Mark code blocks properly
-  
+
+  def _get_current_date(self) -> str:
+    """Get current date in YYYYMMDD format."""
+    return datetime.now().strftime("%Y%m%d")
+
+  def _load_meta(self) -> Dict:
+    """Load meta.json file with download date."""
+    if not self.meta_file.exists():
+      return {}
+
+    try:
+      with open(self.meta_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
+    except Exception as e:
+      click.echo(f"Error loading meta.json: {e}", err=True)
+      return {}
+
+  def _save_meta(self, data: Dict):
+    """Save meta.json file with download date."""
+    try:
+      with open(self.meta_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+    except Exception as e:
+      click.echo(f"Error saving meta.json: {e}", err=True)
+
+  def _handle_archiving(self):
+    """Archive old downloads if date has changed."""
+    current_date = self._get_current_date()
+
+    # Check if downloads directory exists
+    if not self.downloads_dir.exists():
+      # First run, create meta.json with current date
+      self.downloads_dir.mkdir(parents=True, exist_ok=True)
+      self._save_meta({"download_date": current_date})
+      click.echo(f"Starting new download for {current_date}")
+      return
+
+    # Load existing meta
+    meta = self._load_meta()
+    last_date = meta.get("download_date")
+
+    if last_date is None:
+      # Meta file doesn't exist or is empty, create it
+      self._save_meta({"download_date": current_date})
+      click.echo(f"Starting new download for {current_date}")
+      return
+
+    if last_date == current_date:
+      # Same date, continue existing download (idempotency)
+      click.echo(f"Continuing download for {current_date} (idempotent)")
+      return
+
+    # Different date, archive the old download
+    click.echo(f"Date changed from {last_date} to {current_date}")
+    click.echo(f"Archiving previous download to archive/{last_date}/")
+
+    # Create archive directory
+    archive_date_dir = self.archive_dir / last_date
+    archive_date_dir.mkdir(parents=True, exist_ok=True)
+
+    # Move html and md directories to archive
+    if self.html_dir.exists():
+      archive_html = archive_date_dir / "html"
+      if archive_html.exists():
+        shutil.rmtree(archive_html)
+      shutil.move(str(self.html_dir), str(archive_html))
+      click.echo(f"  Moved html/ to archive/{last_date}/html/")
+
+    if self.md_dir.exists():
+      archive_md = archive_date_dir / "md"
+      if archive_md.exists():
+        shutil.rmtree(archive_md)
+      shutil.move(str(self.md_dir), str(archive_md))
+      click.echo(f"  Moved md/ to archive/{last_date}/md/")
+
+    # Update meta.json with new date
+    self._save_meta({"download_date": current_date})
+    click.echo(f"Starting fresh download for {current_date}")
+
   def load_db(self) -> List[Dict]:
     """Load the database of downloaded files."""
     if not self.db_file.exists():
