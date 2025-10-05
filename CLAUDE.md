@@ -207,10 +207,24 @@ The repository includes `.github/workflows/daily-docs-release.yml` that:
    - Runs `make setup && make run`
    - Extracts date from `downloads/meta.json`
    - Creates GitHub Release with tag `docs-YYYYMMDD`
+   - **Commits and pushes `downloads/` folder to repository**
 3. **Release Assets:**
    - `claude-code-docs-YYYYMMDD.tar.gz` - Complete download
    - `html-YYYYMMDD.tar.gz` - HTML files only
    - `md-YYYYMMDD.tar.gz` - Markdown files only
 4. **Release Notes:** Auto-generated with download stats and usage instructions
+5. **Git Commit:** Automated commit with message format:
+   ```
+   docs: update documentation for YYYY-MM-DD
 
-This provides daily snapshots of Claude Code documentation accessible via GitHub Releases, eliminating the need to run the scraper manually for most users.
+   - Downloaded on: YYYYMMDD
+   - HTML files: N
+   - Markdown files: N
+   - Release: docs-YYYYMMDD
+   ```
+
+This provides daily snapshots accessible via both:
+- **GitHub Releases** - Downloadable archives
+- **Repository** - Browse `downloads/` folder directly on GitHub
+
+**Important:** The `downloads/` folder is tracked in git (only `archive/` is ignored), allowing users to browse current documentation without downloading.

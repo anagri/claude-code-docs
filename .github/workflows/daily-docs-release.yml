@@ -135,6 +135,37 @@ jobs:
           asset_name: md-${{ steps.date.outputs.download_date }}.tar.gz
           asset_content_type: application/gzip
 
+      - name: Commit and push downloads folder
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Show current status
+          echo "Git status before commit:"
+          git status
+
+          # Add downloads folder
+          git add downloads/
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            echo "Committing changes..."
+            git commit -m "docs: update documentation for ${{ steps.date.outputs.formatted_date }}
+
+            - Downloaded on: ${{ steps.date.outputs.download_date }}
+            - HTML files: ${{ steps.stats.html_count }}
+            - Markdown files: ${{ steps.stats.md_count }}
+            - Release: ${{ steps.date.outputs.tag_name }}
+
+            Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+            echo "Pushing changes..."
+            git push
+            echo "Downloads folder committed and pushed successfully"
+          fi
+
       - name: Cleanup
         if: always()
         run: |
