@@ -48,27 +48,31 @@ The entire scraper is implemented as a single class (`DocumentationScraper` in `
 ├── main.py              # Single-file implementation
 ├── pyproject.toml       # UV package configuration
 ├── downloads/          # Current download (git-ignored)
-│   ├── meta.json      # Tracks download date for idempotency
+│   ├── meta.json      # Tracks download date and completion status
+│   ├── db.yaml        # URL tracking database
 │   ├── html/          # Downloaded HTML files
-│   │   ├── db.yaml   # URL tracking database
 │   │   └── *.html    # Documentation pages (preserves site structure)
 │   └── md/           # Converted Markdown files
 │       └── *.md      # Mirrors html/ structure
 └── archive/           # Historical downloads (git-ignored)
     └── YYYYMMDD/     # Date-based archive folders
+        ├── db.yaml   # Archived URL tracking database
         ├── html/     # Archived HTML files
         └── md/       # Archived Markdown files
 ```
 
 ### Data Flow
 
-1. **Archive Check**: Compare `meta.json` date with current date
-   - Same date → Continue (idempotent)
+1. **Archive Check**: Compare `meta.json` date and status with current date
+   - Same date + status=completed → Skip (already done)
+   - Same date + status=processing → Clean up and restart (incomplete download)
    - Different date → Move downloads to `archive/YYYYMMDD/` and start fresh
 2. **Download**: URL → HTML (saved to `downloads/html/` + tracked in `db.yaml`)
+   - meta.json status set to "processing"
 3. **Rewrite**: HTML links converted from absolute to relative paths
 4. **Convert**: HTML → Markdown (extracted content saved to `downloads/md/`)
-5. **Serve**: Flask serves HTML files locally (optional)
+5. **Complete**: If both HTML and MD conversion successful, mark status as "completed"
+6. **Serve**: Flask serves HTML files locally (optional)
 
 ## Commands
 
@@ -146,19 +150,30 @@ URLs are converted to file paths by:
 
 ### Meta Format
 
-`downloads/meta.json` tracks download date for idempotency:
+`downloads/meta.json` tracks download date and completion status:
 ```json
 {
-  "download_date": "20251005"
+  "download_date": "20251005",
+  "status": "completed"
 }
 ```
 
+**Status values:**
+- `processing`: Download in progress
+- `completed`: Full workflow (HTML + MD) completed successfully
+
 ## Idempotency & Archiving Behavior
 
-### Same-Date Re-runs (Idempotent)
-- If you run the scraper multiple times on the same date, it continues where it left off
-- Uses `db.yaml` to skip already-downloaded URLs
-- Perfect for crash recovery or interrupted downloads
+### Same-Date Re-runs
+
+**Completed downloads (Idempotent):**
+- If status is "completed", the scraper skips processing entirely
+- Prevents redundant downloads of already-complete documentation
+
+**Incomplete downloads (Crash Recovery):**
+- If status is "processing" or missing, the scraper detects an interrupted download
+- Cleans up incomplete files (html/, md/, db.yaml)
+- Restarts from scratch to ensure consistency
 
 ### Different-Date Re-runs (Archiving)
 - When running on a new date, the system automatically:
@@ -171,12 +186,18 @@ URLs are converted to file paths by:
 ```bash
 # Day 1 (Oct 4): First download
 python main.py --html --md
-# Creates: downloads/html/, downloads/md/, downloads/meta.json {"download_date": "20251004"}
+# Creates: downloads/html/, downloads/md/, meta.json {"download_date": "20251004", "status": "processing"}
+# On success: Updates to {"download_date": "20251004", "status": "completed"}
 
-# Day 1 (Oct 4): Script crashes, re-run
+# Day 1 (Oct 4): Re-run after completion
 python main.py --html --md
-# Output: "Continuing download for 20251004 (idempotent)"
-# Resumes using existing db.yaml
+# Output: "Download already completed for 20251004 - skipping (idempotent)"
+
+# Day 1 (Oct 4): Simulate crash - edit meta.json to set status: "processing"
+python main.py --html --md
+# Output: "WARNING: Previous download for 20251004 was incomplete (status: processing)"
+# Output: "Cleaning up and restarting from scratch..."
+# Deletes html/, md/, db.yaml and starts fresh
 
 # Day 2 (Oct 5): New download
 python main.py --html --md

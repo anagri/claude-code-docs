@@ -33,9 +33,11 @@ class DocumentationScraper:
     self.archive_dir = base_dir / "archive"
     self.html_dir = self.downloads_dir / "html"
     self.md_dir = self.downloads_dir / "md"
-    self.db_file = self.html_dir / "db.yaml"
+    self.db_file = self.downloads_dir / "db.yaml"
     self.meta_file = self.downloads_dir / "meta.json"
-    self.base_url = "https://docs.anthropic.com/en/docs/claude-code/"
+    # Base URL - docs.anthropic.com redirects to docs.claude.com
+    self.base_url = "https://docs.claude.com/en/docs/claude-code/"
+    self.legacy_base_url = "https://docs.anthropic.com/en/docs/claude-code/"
 
     # Handle archiving based on date
     self._handle_archiving()
@@ -79,32 +81,60 @@ class DocumentationScraper:
     except Exception as e:
       click.echo(f"Error saving meta.json: {e}", err=True)
 
+  def _mark_completed(self):
+    """Mark the current download as completed in meta.json."""
+    meta = self._load_meta()
+    if meta:
+      meta["status"] = "completed"
+      self._save_meta(meta)
+      click.echo(f"Marked download as completed in meta.json")
+
   def _handle_archiving(self):
     """Archive old downloads if date has changed."""
     current_date = self._get_current_date()
 
     # Check if downloads directory exists
     if not self.downloads_dir.exists():
-      # First run, create meta.json with current date
+      # First run, create meta.json with current date and processing status
       self.downloads_dir.mkdir(parents=True, exist_ok=True)
-      self._save_meta({"download_date": current_date})
+      self._save_meta({"download_date": current_date, "status": "processing"})
       click.echo(f"Starting new download for {current_date}")
       return
 
     # Load existing meta
     meta = self._load_meta()
     last_date = meta.get("download_date")
+    last_status = meta.get("status")
 
     if last_date is None:
       # Meta file doesn't exist or is empty, create it
-      self._save_meta({"download_date": current_date})
+      self._save_meta({"download_date": current_date, "status": "processing"})
       click.echo(f"Starting new download for {current_date}")
       return
 
     if last_date == current_date:
-      # Same date, continue existing download (idempotency)
-      click.echo(f"Continuing download for {current_date} (idempotent)")
-      return
+      # Same date - check if previous run completed
+      if last_status == "completed":
+        # Previous download completed successfully
+        click.echo(f"Download already completed for {current_date} - skipping (idempotent)")
+        return
+      else:
+        # Previous download was interrupted or incomplete
+        click.echo(f"WARNING: Previous download for {current_date} was incomplete (status: {last_status})")
+        click.echo(f"Cleaning up and restarting from scratch...")
+
+        # Clean up incomplete download
+        if self.html_dir.exists():
+          shutil.rmtree(self.html_dir)
+        if self.md_dir.exists():
+          shutil.rmtree(self.md_dir)
+        if self.db_file.exists():
+          self.db_file.unlink()
+
+        # Reset meta to processing
+        self._save_meta({"download_date": current_date, "status": "processing"})
+        click.echo(f"Starting fresh download for {current_date}")
+        return
 
     # Different date, archive the old download
     click.echo(f"Date changed from {last_date} to {current_date}")
@@ -113,6 +143,14 @@ class DocumentationScraper:
     # Create archive directory
     archive_date_dir = self.archive_dir / last_date
     archive_date_dir.mkdir(parents=True, exist_ok=True)
+
+    # Move db.yaml to archive
+    if self.db_file.exists():
+      archive_db = archive_date_dir / "db.yaml"
+      if archive_db.exists():
+        archive_db.unlink()
+      shutil.move(str(self.db_file), str(archive_db))
+      click.echo(f"  Moved db.yaml to archive/{last_date}/db.yaml")
 
     # Move html and md directories to archive
     if self.html_dir.exists():
@@ -129,8 +167,8 @@ class DocumentationScraper:
       shutil.move(str(self.md_dir), str(archive_md))
       click.echo(f"  Moved md/ to archive/{last_date}/md/")
 
-    # Update meta.json with new date
-    self._save_meta({"download_date": current_date})
+    # Update meta.json with new date and processing status
+    self._save_meta({"download_date": current_date, "status": "processing"})
     click.echo(f"Starting fresh download for {current_date}")
 
   def load_db(self) -> List[Dict]:
@@ -147,10 +185,12 @@ class DocumentationScraper:
       return []
   
   def save_db(self, data: List[Dict]):
-    """Save the database of downloaded files."""
+    """Save the database of downloaded files, sorted by URL for deterministic diffs."""
     try:
+      # Sort data by URL to ensure deterministic output and clean git diffs
+      sorted_data = sorted(data, key=lambda x: x.get('url', ''))
       with open(self.db_file, 'w', encoding='utf-8') as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        yaml.dump(sorted_data, f, default_flow_style=False, sort_keys=False)
     except Exception as e:
       click.echo(f"Error saving database: {e}", err=True)
   
@@ -202,12 +242,40 @@ class DocumentationScraper:
       headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
       }
-      
+
       click.echo(f"Downloading: {url}")
       response = requests.get(url, headers=headers, timeout=30)
+
+      # Check final URL after redirects - must be docs.anthropic.com or docs.claude.com
+      final_url = response.url
+      parsed_final = urlparse(final_url)
+      allowed_domains = ['docs.anthropic.com', 'docs.claude.com']
+      if parsed_final.netloc not in allowed_domains:
+        click.echo(f"WARNING: URL redirected to different domain: {final_url}", err=True)
+        click.echo(f"  Original: {url}", err=True)
+        click.echo(f"  Final domain: {parsed_final.netloc} (expected: {', '.join(allowed_domains)})", err=True)
+        click.echo(f"  Skipping download - file will not be saved", err=True)
+        return None
+
+      # Check for HTTP errors (4xx, 5xx)
+      if response.status_code >= 400:
+        click.echo(f"WARNING: HTTP {response.status_code} for {url}", err=True)
+        click.echo(f"  Reason: {response.reason}", err=True)
+        click.echo(f"  Skipping download - file will not be saved", err=True)
+        return None
+
       response.raise_for_status()
-      
-      return response.text
+
+      # Check for soft 404 (HTTP 200 with "Page Not Found" content)
+      content = response.text
+      if '<title>Page Not Found</title>' in content or '<title>404' in content:
+        click.echo(f"WARNING: Soft 404 detected for {url}", err=True)
+        click.echo(f"  Page returns HTTP {response.status_code} but contains '404' or 'Page Not Found'", err=True)
+        click.echo(f"  Final URL: {final_url}", err=True)
+        click.echo(f"  Skipping download - file will not be saved", err=True)
+        return None
+
+      return content
     except Exception as e:
       click.echo(f"Error downloading {url}: {e}", err=True)
       return None
@@ -216,23 +284,30 @@ class DocumentationScraper:
     """Find all documentation links in the HTML content."""
     soup = BeautifulSoup(html_content, 'html.parser')
     links = set()
-    
+
     # Find all links that point to Claude Code documentation
     for link in soup.find_all('a', href=True):
       href = link['href']
-      
+
       # Convert relative URLs to absolute
       full_url = urljoin(base_url, href)
-      
-      # Only include Claude Code documentation URLs
-      if full_url.startswith(self.base_url):
+
+      # Parse the URL to validate domain
+      parsed = urlparse(full_url)
+
+      # Only include docs.anthropic.com or docs.claude.com URLs
+      allowed_domains = ['docs.anthropic.com', 'docs.claude.com']
+      if parsed.netloc not in allowed_domains:
+        continue
+
+      # Only include Claude Code documentation URLs (both current and legacy base URLs)
+      if full_url.startswith(self.base_url) or full_url.startswith(self.legacy_base_url):
         # Remove fragments and query parameters for consistency
-        parsed = urlparse(full_url)
         clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
         if clean_url.endswith('/'):
           clean_url = clean_url[:-1]
         links.add(clean_url)
-    
+
     return list(links)
   
   def rewrite_links_in_html(self, html_content: str) -> str:
@@ -711,16 +786,20 @@ def main(html: bool, md: bool, serve: bool, port: int, url: str):
     click.echo("Starting HTML download...")
     scraper.scrape_documentation(url)
     click.echo("HTML download completed!")
-    
+
     click.echo("Rewriting links to be relative...")
     scraper.rewrite_all_links()
     click.echo("Link rewriting completed!")
-  
+
   if md:
     click.echo("Starting Markdown conversion...")
     scraper.convert_html_to_markdown()
     click.echo("Markdown conversion completed!")
-  
+
+  # Mark as completed only if both HTML and MD were processed in this run
+  if html and md:
+    scraper._mark_completed()
+
   if serve:
     if not (scraper.html_dir / "index.html").exists():
       click.echo("No HTML files found. Please run with --html flag first.", err=True)

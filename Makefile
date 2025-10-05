@@ -24,9 +24,9 @@ setup: ## Install dependencies using uv (first-time setup)
 	@echo "Setup complete! Virtual environment created at .venv"
 	@echo "Run 'make run-full' to download and convert documentation"
 
-clean: ## Remove downloads and archive directories
-	@echo "Removing downloads and archive directories..."
-	rm -rf downloads/ archive/
+clean: ## Remove downloads
+	@echo "Removing downloads directory..."
+	rm -rf downloads/
 	@echo "Clean complete!"
 
 clean-all: ## Remove downloads, archive, and virtual environment
