@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Claude Code Documentation Scraper and Local Server
+Claude Documentation Scraper and Local Server
 
-This tool downloads HTML documentation from Anthropic's Claude Code docs,
+This tool downloads HTML documentation from Anthropic's Claude documentation,
 preserves directory structure, converts links to relative paths, and serves
-the site locally.
+the site locally. Supports all documentation sections including Claude Code,
+API reference, release notes, and more.
 """
 
 import os
@@ -25,7 +26,7 @@ from flask import Flask, send_from_directory, abort, redirect
 
 
 class DocumentationScraper:
-  """Handles downloading, converting, and serving Claude Code documentation."""
+  """Handles downloading, converting, and serving Claude documentation (all sections)."""
   
   def __init__(self, base_dir: Path):
     self.base_dir = base_dir
@@ -36,8 +37,9 @@ class DocumentationScraper:
     self.db_file = self.downloads_dir / "db.yaml"
     self.meta_file = self.downloads_dir / "meta.json"
     # Base URL - docs.anthropic.com redirects to docs.claude.com
-    self.base_url = "https://docs.claude.com/en/docs/claude-code/"
-    self.legacy_base_url = "https://docs.anthropic.com/en/docs/claude-code/"
+    # Updated to support all documentation sections, not just Claude Code
+    self.base_url = "https://docs.claude.com/en/"
+    self.legacy_base_url = "https://docs.anthropic.com/en/"
 
     # Handle archiving based on date
     self._handle_archiving()
@@ -195,41 +197,36 @@ class DocumentationScraper:
       click.echo(f"Error saving database: {e}", err=True)
   
   def url_to_file_path(self, url: str) -> Path:
-    """Convert URL to file path preserving directory structure."""
+    """Convert URL to file path preserving directory structure under /en/."""
     # Parse the URL to extract just the path component
     parsed_url = urlparse(url)
-    
-    # Remove the base URL prefix from the full URL
-    if url.startswith(self.base_url):
-      path = url.replace(self.base_url, "").strip("/")
+
+    # Extract path after /en/
+    if "/en/" in parsed_url.path:
+      path = parsed_url.path.split("/en/", 1)[1].strip("/")
     else:
-      # Handle malformed URLs or different formats
-      # Extract path after /claude-code/
-      if "/claude-code/" in parsed_url.path:
-        path = parsed_url.path.split("/claude-code/", 1)[1].strip("/")
-      else:
-        # Fallback: use the last part of the path
-        path = parsed_url.path.strip("/").split("/")[-1] if parsed_url.path.strip("/") else "index"
-    
-    # If it's the root page, use "index.html"
-    if not path:
+      # Fallback: use the full path
+      path = parsed_url.path.strip("/")
+
+    # Handle home page or root
+    if not path or path == "home":
       return self.html_dir / "index.html"
-    
+
     # Clean the path to remove any invalid characters
     # Replace any remaining protocol or domain parts
     path = re.sub(r'^https?[:/]+', '', path)
-    path = re.sub(r'^[^/]*docs\.anthropic\.com[^/]*', '', path)
+    path = re.sub(r'^[^/]*docs\.(anthropic|claude)\.com[^/]*', '', path)
     path = path.strip('/')
-    
+
     if not path:
       return self.html_dir / "index.html"
-    
-    # Create the file path preserving directory structure
+
+    # Create the file path preserving full directory structure
     file_path = self.html_dir / f"{path}.html"
-    
+
     # Ensure parent directories exist
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     return file_path
   
   def is_url_downloaded(self, url: str, db_data: List[Dict]) -> bool:
@@ -285,7 +282,7 @@ class DocumentationScraper:
     soup = BeautifulSoup(html_content, 'html.parser')
     links = set()
 
-    # Find all links that point to Claude Code documentation
+    # Find all links that point to Claude documentation (all sections)
     for link in soup.find_all('a', href=True):
       href = link['href']
 
@@ -300,8 +297,8 @@ class DocumentationScraper:
       if parsed.netloc not in allowed_domains:
         continue
 
-      # Only include Claude Code documentation URLs (both current and legacy base URLs)
-      if full_url.startswith(self.base_url) or full_url.startswith(self.legacy_base_url):
+      # Include all documentation under /en/ (docs, api, release-notes, etc.)
+      if "/en/" in parsed.path:
         # Remove fragments and query parameters for consistency
         clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
         if clean_url.endswith('/'):
@@ -313,38 +310,51 @@ class DocumentationScraper:
   def rewrite_links_in_html(self, html_content: str) -> str:
     """Rewrite links in HTML to be relative."""
     soup = BeautifulSoup(html_content, 'html.parser')
-    
+
     # Rewrite all links
     for link in soup.find_all('a', href=True):
       href = link['href']
-      
-      # If it's a Claude Code documentation link, make it relative
-      if href.startswith(self.base_url):
-        # Convert to relative path
-        relative_path = href.replace(self.base_url, "/").rstrip('/')
-        if not relative_path:
-          relative_path = "/"
-        link['href'] = relative_path
-      elif href.startswith('https://docs.anthropic.com/en/docs/claude-code/'):
-        # Handle the full URL format
-        relative_path = href.replace('https://docs.anthropic.com/en/docs/claude-code/', "/").rstrip('/')
-        if not relative_path:
-          relative_path = "/"
-        link['href'] = relative_path
-    
+
+      # Check if it's a documentation link (current or legacy domain)
+      if (href.startswith(self.base_url) or
+          href.startswith(self.legacy_base_url) or
+          href.startswith('https://docs.claude.com/en/') or
+          href.startswith('https://docs.anthropic.com/en/')):
+
+        # Extract path after /en/
+        parsed = urlparse(href)
+        if "/en/" in parsed.path:
+          path = parsed.path.split("/en/", 1)[1].strip("/")
+          relative_path = f"/{path}" if path else "/"
+          link['href'] = relative_path
+
     # Also handle any CSS or JS links if needed
     for link in soup.find_all('link', href=True):
       href = link['href']
-      if href.startswith(self.base_url):
-        relative_path = href.replace(self.base_url, "/").rstrip('/')
-        link['href'] = relative_path
-    
+      if (href.startswith(self.base_url) or
+          href.startswith(self.legacy_base_url) or
+          href.startswith('https://docs.claude.com/en/') or
+          href.startswith('https://docs.anthropic.com/en/')):
+
+        parsed = urlparse(href)
+        if "/en/" in parsed.path:
+          path = parsed.path.split("/en/", 1)[1].strip("/")
+          relative_path = f"/{path}" if path else "/"
+          link['href'] = relative_path
+
     for script in soup.find_all('script', src=True):
       src = script['src']
-      if src.startswith(self.base_url):
-        relative_path = src.replace(self.base_url, "/").rstrip('/')
-        script['src'] = relative_path
-    
+      if (src.startswith(self.base_url) or
+          src.startswith(self.legacy_base_url) or
+          src.startswith('https://docs.claude.com/en/') or
+          src.startswith('https://docs.anthropic.com/en/')):
+
+        parsed = urlparse(src)
+        if "/en/" in parsed.path:
+          path = parsed.path.split("/en/", 1)[1].strip("/")
+          relative_path = f"/{path}" if path else "/"
+          script['src'] = relative_path
+
     return str(soup)
   
   def extract_main_content(self, soup: BeautifulSoup) -> Optional[BeautifulSoup]:
@@ -770,10 +780,10 @@ class DocumentationScraper:
 @click.option('--md', is_flag=True, help='Convert HTML files to Markdown')
 @click.option('--serve', is_flag=True, help='Start local web server to serve the documentation')
 @click.option('--port', default=8000, help='Port for the web server (default: 8000)')
-@click.option('--url', default='https://docs.anthropic.com/en/docs/claude-code/', 
-              help='Starting URL for scraping (default: Claude Code docs)')
+@click.option('--url', default='https://docs.claude.com/en/home',
+              help='Starting URL for scraping (default: Claude documentation home)')
 def main(html: bool, md: bool, serve: bool, port: int, url: str):
-  """Claude Code Documentation Scraper, Converter, and Local Server."""
+  """Claude Documentation Scraper, Converter, and Local Server."""
   
   if not html and not md and not serve:
     click.echo("Please specify at least one of --html, --md, or --serve flags")
