@@ -657,8 +657,12 @@ class DocumentationScraper:
         markdown_content = url_header + markdown_content
         
         # Create corresponding MD file path
-        md_path = self.md_dir / relative_html_path.with_suffix('.md')
-        
+        # Special case: strengthen-guardrails folder should be at downloads/ level, not downloads/md/
+        if "strengthen-guardrails" in str(relative_html_path):
+            md_path = self.downloads_dir / relative_html_path.with_suffix('.md')
+        else:
+            md_path = self.md_dir / relative_html_path.with_suffix('.md')
+
         # Ensure parent directories exist
         md_path.parent.mkdir(parents=True, exist_ok=True)
         
