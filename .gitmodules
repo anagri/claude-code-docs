@@ -1,3 +1,6 @@
 [submodule "claude-cookbooks"]
 	path = claude-cookbooks
 	url = git@github.com:anthropics/claude-cookbooks.git
+[submodule "claude-quickstarts"]
+	path = claude-quickstarts
+	url = git@github.com:anthropics/claude-quickstarts.git
