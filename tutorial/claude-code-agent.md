@@ -15,7 +15,6 @@ This tutorial provides a comprehensive, hands-on guide to Claude Code sub-agents
 
 Sub-agents are pre-configured AI personalities that Claude Code can delegate tasks to. Think of them as specialized team members - each with specific expertise, their own workspace, and tailored permissions.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Core sub-agent concepts
 
 ### Key Characteristics
 
@@ -28,7 +27,6 @@ Each sub-agent has:
 
 When Claude Code encounters a task matching a sub-agent's expertise, it can delegate that task to the specialized sub-agent, which works independently and returns results.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - What are subagents section
 
 ## Key Benefits
 
@@ -38,7 +36,6 @@ Each sub-agent operates in its own context, preventing pollution of the main con
 
 **Example:** A research-assistant sub-agent can explore dozens of files and documentation pages without cluttering the main conversation with all the intermediate search results - only returning the relevant findings.
 
-> **Reference:** `api/agent-sdk/subagents.md` - Context Management section
 
 ### Specialized Expertise
 
@@ -46,13 +43,11 @@ Sub-agents can be fine-tuned with detailed instructions for specific domains, le
 
 **Example:** A database-migration sub-agent can have detailed knowledge about SQL best practices, rollback strategies, and data integrity checks that would be unnecessary noise in the main agent's instructions.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Key benefits
 
 ### Reusability
 
 Once created, sub-agents can be used across different projects and shared with your team for consistent workflows.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Reusability benefit
 
 ### Flexible Permissions
 
@@ -60,7 +55,6 @@ Each sub-agent can have different tool access levels, allowing you to limit powe
 
 **Example:** A doc-reviewer sub-agent might only have access to Read and Grep tools, ensuring it can analyze but never accidentally modify your documentation files.
 
-> **Reference:** `api/agent-sdk/subagents.md` - Tool Restrictions section
 
 ## Quick Start (5 minutes)
 
@@ -74,7 +68,6 @@ In your Claude Code session, run:
 /agents
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Quick start section
 
 ### Step 2: Select 'Create New Agent'
 
@@ -83,7 +76,6 @@ Choose whether to create a **project-level** or **user-level** sub-agent:
 - **Project-level** (`.claude/agents/`) - Available in current project, shared with team
 - **User-level** (`~/.claude/agents/`) - Available across all your projects
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File locations
 
 ### Step 3: Define the Sub-agent
 
@@ -95,7 +87,6 @@ Choose whether to create a **project-level** or **user-level** sub-agent:
 4. Generate a complete sub-agent definition
 5. Allow editing in your preferred editor (press `e`)
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Quick start, step 3
 
 ### Step 4: Save and Use
 
@@ -105,7 +96,6 @@ Your sub-agent is now available! Claude will use it automatically when appropria
 > Use the code-reviewer subagent to check my recent changes
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Quick start, step 4
 
 ## Anatomy of a Sub-Agent File
 
@@ -120,7 +110,6 @@ Sub-agents are stored as Markdown files with YAML frontmatter. Understanding thi
 
 When sub-agent names conflict, project-level sub-agents take precedence over user-level sub-agents.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File locations table
 
 ### File Format
 
@@ -142,7 +131,6 @@ Include specific instructions, best practices, and any constraints
 the subagent should follow.
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File format section
 
 ### Configuration Fields
 
@@ -153,7 +141,6 @@ the subagent should follow.
 | `tools` | No | Comma-separated list of specific tools. If omitted, inherits all tools from the main thread |
 | `model` | No | Model to use for this subagent. Can be a model alias (`sonnet`, `opus`, `haiku`) or `'inherit'` to use the main conversation's model. If omitted, defaults to the configured subagent model |
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Configuration fields table
 
 ### Model Selection
 
@@ -165,7 +152,6 @@ The `model` field allows fine-grained control:
 
 Using `'inherit'` is particularly useful when you want your sub-agents to adapt to the model choice of the main conversation, ensuring consistent capabilities and response style throughout your session.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Model selection section
 
 ## Hands-On Exercises
 
@@ -208,7 +194,6 @@ Never modify files other than the log file.
 
 **Expected behavior:** The sub-agent will execute `ls`, log the command to `.command-log.txt`, and return the output.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File format and tools configuration
 
 ### Exercise 2: Tool Restrictions - Read-Only Analyzer
 
@@ -255,7 +240,6 @@ Present findings in a clear report with:
 
 **Expected behavior:** The sub-agent will analyze files using only Read, Grep, and Glob - it cannot use Edit or Write tools.
 
-> **Reference:** `api/agent-sdk/subagents.md` - Tool Restrictions, Read-only agents example
 
 ### Exercise 3: Model Selection - Fast Triage Agent
 
@@ -301,7 +285,6 @@ Keep analysis concise - this is triage, not deep debugging.
 
 **Expected behavior:** Fast response using Haiku model for quick categorization.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Model selection and `api/agent-sdk/subagents.md` - AgentDefinition model field
 
 ### Exercise 4: Automatic Delegation - Proactive Test Runner
 
@@ -351,7 +334,6 @@ Never skip failing tests - fix them.
 
 **Expected behavior:** After making the change, Claude should automatically invoke the test-runner sub-agent to run tests and fix any failures.
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Automatic delegation with "use PROACTIVELY" and "MUST BE USED" in description
 
 ## Real-World Use Cases
 
@@ -400,7 +382,6 @@ Include specific examples of how to fix issues.
 > Use the code-reviewer subagent to check my recent changes
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Code reviewer example
 
 ### Use Case 2: Debugging Specialist
 
@@ -445,7 +426,6 @@ Focus on fixing the underlying issue, not just symptoms.
 > Have the debugger subagent investigate this error: TypeError: Cannot read property 'id' of undefined
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Debugger example
 
 ### Use Case 3: Data Science Specialist
 
@@ -490,7 +470,6 @@ Always ensure queries are efficient and cost-effective.
 > Ask the data-scientist subagent to analyze user engagement trends from our analytics database
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Data scientist example
 
 ### Use Case 4: Security Auditor
 
@@ -562,7 +541,6 @@ Use `grep -r` to search for common vulnerability patterns.
 > Use the security-auditor subagent to review the authentication module before deployment
 ```
 
-> **Reference:** Synthesized from `docs/claude-code/sub-agents.md` - Code reviewer patterns and security focus
 
 ### Use Case 5: Documentation Generator
 
@@ -631,7 +609,6 @@ For each function/method document:
 > Have the doc-writer subagent create documentation for the new authentication API
 ```
 
-> **Reference:** Synthesized from common workflows in `docs/claude-code/common-workflows.md` - Handle documentation section
 
 ### Use Case 6: Performance Optimizer
 
@@ -703,7 +680,6 @@ Always benchmark before and after changes.
 > Use the performance-optimizer subagent to analyze the data processing pipeline
 ```
 
-> **Reference:** Synthesized from use case guides and tool patterns in documentation
 
 ## User vs Project Sub-Agents
 
@@ -718,7 +694,6 @@ Understanding the difference between user-level and project-level sub-agents is 
 | **Priority** | Lower priority when names conflict | Higher priority (overrides user-level) |
 | **Use Case** | Personal preferences and workflows | Team-shared standards and processes |
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File locations table and settings documentation
 
 ### When to Use User-Level Sub-agents
 
@@ -776,7 +751,6 @@ git add .claude/agents/
 git commit -m "Add team sub-agents for code review and testing"
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Best practices, version control
 
 ## CLI Integration
 
@@ -797,7 +771,6 @@ claude --agents '{
 }'
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - CLI-based configuration section
 
 ### Priority Hierarchy
 
@@ -807,7 +780,6 @@ CLI-defined sub-agents have **medium priority**:
 2. **Medium**: CLI-defined sub-agents (`--agents` flag)
 3. **Lowest**: User-level sub-agents (`~/.claude/agents/`)
 
-> **Reference:** `docs/claude-code/sub-agents.md` - CLI-based configuration priority
 
 ### Use Cases for CLI Sub-agents
 
@@ -846,7 +818,6 @@ claude --agents '{
 # Users can copy-paste the --agents JSON
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` and `docs/claude-code/cli-reference.md` - --agents flag format
 
 ### Complete CLI Flag Format
 
@@ -861,7 +832,6 @@ claude --agents '{
 }'
 ```
 
-> **Reference:** `docs/claude-code/cli-reference.md` - Agents flag format
 
 ## Advanced Topics
 
@@ -877,7 +847,6 @@ This creates a sequential workflow where:
 1. `code-analyzer` identifies issues (read-only)
 2. `optimizer` implements fixes (read-write)
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Advanced usage, chaining subagents
 
 ### Dynamic Sub-agent Selection
 
@@ -903,7 +872,6 @@ Claude Code intelligently selects sub-agents based on:
    description: Use immediately after writing or modifying code
    ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Dynamic subagent selection and automatic delegation
 
 ### Working with CLAUDE.md
 
@@ -925,7 +893,6 @@ Sub-agents can leverage project-specific context from CLAUDE.md files:
 
 Sub-agents automatically see this context, making them project-aware.
 
-> **Reference:** `docs/claude-code/memory.md` - CLAUDE.md hierarchy and `api/agent-sdk/modifying-system-prompts.md` - CLAUDE.md integration
 
 ### MCP Tools and Sub-agents
 
@@ -952,7 +919,6 @@ tools: mcp__postgres__execute_query, mcp__postgres__get_schema, Read
 You are a database expert with access to PostgreSQL tools.
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Available tools section and MCP integration
 
 ### Output Styles Integration
 
@@ -967,7 +933,6 @@ Sub-agents are distinct from output styles:
 
 You can combine both: use an output style for the main conversation, and sub-agents for specific tasks.
 
-> **Reference:** `docs/claude-code/output-styles.md` - Comparisons to related features
 
 ### Performance Considerations
 
@@ -980,7 +945,6 @@ You can combine both: use an output style for the main conversation, and sub-age
 - May add latency as they gather required context
 - Balance specialization benefits vs. startup overhead
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Performance considerations
 
 ## How Sub-Agents Work (Under the Hood)
 
@@ -1010,7 +974,6 @@ Understanding the internal mechanics helps you design better sub-agents.
    - Only final results passed back
    - Main conversation continues with results
 
-> **Reference:** Synthesized from `docs/claude-code/sub-agents.md` and `api/agent-sdk/subagents.md` - How SDK uses subagents
 
 ### AgentDefinition Mapping
 
@@ -1024,7 +987,6 @@ When you create a sub-agent file, it maps to an internal `AgentDefinition`:
 | `tools` | `tools` | string[] | No |
 | `model` | `model` | enum | No |
 
-> **Reference:** `api/agent-sdk/subagents.md` - AgentDefinition Configuration table
 
 ### Tool Execution Flow
 
@@ -1037,7 +999,6 @@ When a sub-agent uses a tool:
 5. Tool results stay in sub-agent context
 6. Only final summary goes to main agent
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Tool access and permissions
 
 ## Configuration Reference
 
@@ -1055,7 +1016,6 @@ model: sonnet                      # sonnet, opus, haiku, or 'inherit'
 ---
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File format and configuration fields
 
 ### Model Options
 
@@ -1067,7 +1027,6 @@ model: sonnet                      # sonnet, opus, haiku, or 'inherit'
 | `'inherit'` | Use same model as main conversation |
 | Omitted | Default subagent model (sonnet) |
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Model selection section
 
 ### Available Tools
 
@@ -1101,7 +1060,6 @@ Complete list of tools that can be specified in the `tools` field:
 **MCP Tools:**
 - Any tool from configured MCP servers (named `mcp__{server}__{tool}`)
 
-> **Reference:** `docs/claude-code/settings.md` - Tools available to Claude table
 
 ### Tool Combinations by Use Case
 
@@ -1125,7 +1083,6 @@ tools: Read, Edit, MultiEdit, Write, Grep, Glob
 tools: WebSearch, WebFetch, Read, Write
 ```
 
-> **Reference:** `api/agent-sdk/subagents.md` - Common Tool Combinations section
 
 ## Troubleshooting
 
@@ -1139,7 +1096,6 @@ Solution:
 - Try explicit invocation to test functionality
 - Check that sub-agent file is in correct location
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Automatic delegation section
 
 **Issue: Sub-agent can't access certain tools**
 
@@ -1149,7 +1105,6 @@ Solution:
 - Remember: omitting tools field inherits ALL tools
 - MCP tools require server to be connected
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Available tools section
 
 **Issue: Sub-agent using wrong model**
 
@@ -1159,7 +1114,6 @@ Solution:
 - Use `'inherit'` (with quotes) to match main conversation
 - Default is sonnet if field is omitted
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Model selection
 
 **Issue: Conflicts between user and project sub-agents**
 
@@ -1169,7 +1123,6 @@ Solution:
 - Use `/agents` command to see which is active
 - Check priority: Project > CLI > User
 
-> **Reference:** `docs/claude-code/sub-agents.md` - File locations and priority
 
 **Issue: Sub-agent context seems limited**
 
@@ -1179,7 +1132,6 @@ Solution:
 - Consider including key context in system prompt
 - Latency is normal as they gather information
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Performance considerations
 
 ## Best Practices
 
@@ -1190,7 +1142,6 @@ Use `/agents` to have Claude generate initial sub-agent definitions, then custom
 - Proper structure and formatting
 - Starting point for iteration
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Best practices, first item
 
 ### 2. Design Focused Sub-agents
 
@@ -1208,7 +1159,6 @@ name: code-helper
 description: Help with code, tests, docs, deployment, and debugging
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Best practices, design focused subagents
 
 ### 3. Write Detailed Prompts
 
@@ -1247,7 +1197,6 @@ ISSUES: [any problems found]
 ```
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Best practices, write detailed prompts
 
 ### 4. Limit Tool Access
 
@@ -1266,7 +1215,6 @@ tools: Read, Edit, Bash
 tools: # Omit to inherit all
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Best practices, limit tool access
 
 ### 5. Version Control
 
@@ -1279,7 +1227,6 @@ git commit -m "Add project sub-agents"
 git push
 ```
 
-> **Reference:** `docs/claude-code/sub-agents.md` - Best practices, version control
 
 ### 6. Use Descriptive Names
 
